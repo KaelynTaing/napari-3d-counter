@@ -347,7 +347,7 @@ class Count3D(QWidget):  # pylint: disable=R0902
         layer.border_width_is_relative = False  # ensure pixel mode
 
         selected_indices = list(layer.selected_data)
-        print(f"[slider] value={value}, selected={selected_indices}")  # debug
+        # print(f"[slider] value={value}, selected={selected_indices}")  # debug
 
         if not selected_indices:
             return  # no selection → only update default for next click
@@ -359,10 +359,10 @@ class Count3D(QWidget):  # pylint: disable=R0902
             new_sizes[idx] = float(value)
         layer.size = new_sizes
 
-        print(f"[slider] value={value}, selected={selected_indices}")
-        print(f"sizes before: {layer.size}")
+        # print(f"[slider] value={value}, selected={selected_indices}")
+        # print(f"sizes before: {layer.size}")
         layer.size = new_sizes
-        print(f"sizes after: {layer.size}")
+        # print(f"sizes after: {layer.size}")
 
         # new_sizes = layer.size.copy()
         # new_borders = layer.border_width.copy()
