@@ -32,6 +32,7 @@ from qtpy.QtWidgets import (  # pylint: disable=no-name-in-module
     QComboBox,
     QTableWidget,
     QTableWidgetItem,
+    QSlider,
 )
 
 from .celltype_config import (
@@ -243,6 +244,37 @@ class Count3D(QWidget):  # pylint: disable=R0902
             name="out of slice",
         )
 
+        self.setLayout(QVBoxLayout())
+
+        # Create a slider for individual point sizing
+        self.layout().addWidget(QLabel("Individual Point Size:"))
+        self.size_slider = QSlider(Qt.Horizontal)
+        self.size_slider.setMinimum(1)
+        self.size_slider.setMaximum(200)
+        self.size_slider.setValue(20)  # Default starting value
+        self.size_slider.valueChanged.connect(self._on_slider_change)
+        self.layout().addWidget(self.size_slider)
+
+        # In __init__, replace your z-scale slider block with this:
+        self.layout().addWidget(QLabel("Z Scale:"))
+        self.z_scale_label = QLabel("1.0x")  # live readout
+        self.layout().addWidget(self.z_scale_label)
+        self.z_scale_slider = QSlider(Qt.Horizontal)
+        self.z_scale_slider.setMinimum(1)
+        self.z_scale_slider.setMaximum(100)
+        self.z_scale_slider.setValue(10)
+        self.z_scale_slider.valueChanged.connect(self._on_z_scale_change)
+        self.layout().addWidget(self.z_scale_slider)
+
+        # # In __init__, after your existing size slider:
+        # self.layout().addWidget(QLabel("Z Scale:"))
+        # self.z_scale_slider = QSlider(Qt.Horizontal)
+        # self.z_scale_slider.setMinimum(1)  # = 0.1x
+        # self.z_scale_slider.setMaximum(100)  # = 10.0x
+        # self.z_scale_slider.setValue(10)  # = 1.0x default
+        # self.z_scale_slider.valueChanged.connect(self._on_z_scale_change)
+        # self.layout().addWidget(self.z_scale_slider)
+
         def update_out_of_slice_size():
             current = self.out_of_slice_points.current_size
             n_points = self.out_of_slice_points.data.shape[0]
@@ -266,7 +298,7 @@ class Count3D(QWidget):  # pylint: disable=R0902
         # make new_pointer_point run each time data is changed
         self.pointer.events.data.connect(self.new_pointer_point)
         # initialize qt GUI
-        self.setLayout(QVBoxLayout())
+        # self.setLayout(QVBoxLayout())
         # the label that says the current cell_type
         self.pointer_type_state_label = QLabel()
         self.pointer_type_state_label.setAlignment(Qt.AlignCenter)
@@ -298,6 +330,98 @@ class Count3D(QWidget):  # pylint: disable=R0902
         self.pointer_type_state = self.cell_type_gui_and_data[0]
         self.change_state_to(self.pointer_type_state)
         self.update_gui()
+
+    def _on_slider_change(self, value: int):
+        self.pointer.current_size = value
+        self.out_of_slice_points.current_size = value
+
+        layer = self.viewer.layers.selection.active
+        if (
+            not isinstance(layer, napari.layers.Points)
+            or layer.name == "Point adder"
+        ):
+            return
+
+        layer.current_size = value
+        layer.border_width_is_relative = False  # ensure pixel mode
+
+        selected_indices = list(layer.selected_data)
+        print(f"[slider] value={value}, selected={selected_indices}")  # debug
+
+        if not selected_indices:
+            return  # no selection → only update default for next click
+
+        new_sizes = layer.size.copy().astype(
+            np.float32
+        )  # ensure float32, shape (N,)
+        for idx in selected_indices:
+            new_sizes[idx] = float(value)
+        layer.size = new_sizes
+
+        print(f"[slider] value={value}, selected={selected_indices}")
+        print(f"sizes before: {layer.size}")
+        layer.size = new_sizes
+        print(f"sizes after: {layer.size}")
+
+        # new_sizes = layer.size.copy()
+        # new_borders = layer.border_width.copy()
+        # if len(new_borders) != len(layer.data):
+        #     new_borders = np.full(len(layer.data), 1.0)
+
+        # for idx in selected_indices:
+        #     new_sizes[idx] = value
+        #     new_borders[idx] = max(1.0, value * 0.1)
+
+        # layer.size = new_sizes
+        # layer.border_width = new_borders
+        layer.refresh()
+
+        # def _on_slider_change(self, value: int):
+        # 1. Always update the pointer's default size for the next click
+        self.pointer.current_size = value
+        self.out_of_slice_points.current_size = value
+
+        # 2. Get the active layer
+        layer = self.viewer.layers.selection.active
+
+        # 3. Guard: only act on real cell-type Points layers
+        if not isinstance(layer, napari.layers.Points):
+            return
+        if layer.name == "Point adder":
+            return
+
+        # 4. Update current_size so the NEXT added point uses this size
+        layer.current_size = value
+
+        # 5. Update only the selected points (if any are selected)
+        selected_indices = list(layer.selected_data)
+        if not selected_indices:
+            return  # nothing selected — only change the default, not existing points
+
+        new_sizes = layer.size.copy()  # shape: (N,)  — 1D!
+        for idx in selected_indices:
+            new_sizes[idx] = value
+        layer.size = new_sizes
+
+        # 6. Fix border widths to stay proportional (napari uses 0.0–1.0 scale)
+        layer.border_width_is_relative = False
+
+        new_borders = layer.border_width.copy()
+        if new_borders.ndim == 0 or len(new_borders) == 1:
+            new_borders = np.full(len(layer.data), float(new_borders.flat[0]))
+        for idx in selected_indices:
+            new_borders[idx] = max(1, value * 0.1)  # ~10% of size in pixels
+        layer.border_width = new_borders
+
+        layer.refresh()
+
+    def _on_z_scale_change(self, value: int):
+        z_scale = value / 10.0  # 1–100 → 0.1–10.0
+        self.z_scale_label.setText(f"{z_scale:.1f}x")
+        for layer in self.viewer.layers:
+            current_scale = list(layer.scale)
+            current_scale[0] = z_scale
+            layer.scale = current_scale
 
     def update_out_of_slice(self):
         """
@@ -387,6 +511,20 @@ class Count3D(QWidget):  # pylint: disable=R0902
         Inits a cell type GUI and data by adding a layer to the viewer, and
         setting the name of the button, also binds the key
         """
+
+        # Get scale from the first image layer if one exists
+        image_layer = next(
+            (
+                l
+                for l in self.viewer.layers
+                if isinstance(l, napari.layers.Image)
+            ),
+            None,
+        )
+        image_scale = (
+            image_layer.scale if image_layer is not None else (1, 1, 1)
+        )
+
         point_layer = self.viewer.add_points(
             data=data,
             ndim=3,
@@ -427,9 +565,9 @@ class Count3D(QWidget):  # pylint: disable=R0902
         point_layer.events.current_face_color.connect(
             partial(out.update_attr, "face_color")
         )
-        point_layer.events.current_size.connect(
-            partial(out.update_attr, "size")
-        )
+        # point_layer.events.current_size.connect(
+        #     partial(out.update_attr, "size")
+        # )
         point_layer.events.current_symbol.connect(
             partial(out.update_attr, "symbol")
         )
@@ -595,6 +733,7 @@ class Count3D(QWidget):  # pylint: disable=R0902
                 cell_type.layer.data, columns=["z", "y", "x"]
             )
             partial_df.insert(0, "cell_type", cell_type.layer.name)
+            partial_df["size"] = cell_type.layer.size  # <-- add this
             partial_dfs.append(partial_df)
         out = pd.concat(partial_dfs)
         return out
@@ -621,6 +760,10 @@ class Count3D(QWidget):  # pylint: disable=R0902
                     data["cell_type"] == layer_name, ["z", "y", "x"]
                 ]
                 layers[layer_name].data = points
+                # ✅ ADDED: restore sizes for existing layers
+                if "size" in data.columns:
+                    sizes = data.loc[data["cell_type"] == layer_name, "size"]
+                    layers[layer_name].size = sizes.to_numpy(dtype=np.float32)
         self.initial_config = process_cell_type_config(
             [
                 ct.get_calculated_config(self.out_of_slice_points.current_size)
@@ -633,6 +776,10 @@ class Count3D(QWidget):  # pylint: disable=R0902
         ):
             points = data.loc[data["cell_type"] == layer_name, ["z", "y", "x"]]
             cell_type = self.init_celltype_gui_and_data(config, data=points)
+            # ✅ ADDED: restore sizes for new layers
+            if "size" in data.columns:
+                sizes = data.loc[data["cell_type"] == layer_name, "size"]
+                cell_type.layer.size = sizes.to_numpy(dtype=np.float32)
             self.cell_type_gui_and_data.append(cell_type)
             # put button right below the last one
             layout_index = self.layout().indexOf(
