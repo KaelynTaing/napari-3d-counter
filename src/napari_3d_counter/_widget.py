@@ -33,6 +33,7 @@ from qtpy.QtWidgets import (  # pylint: disable=no-name-in-module
     QTableWidget,
     QTableWidgetItem,
     QSlider,
+    # QLineEdit,
 )
 
 from .celltype_config import (
@@ -309,6 +310,18 @@ class Count3D(QWidget):  # pylint: disable=R0902
         self.layout().addWidget(hline)
         for cell_type in self.cell_type_gui_and_data:
             self.layout().addWidget(cell_type.button)
+
+        # attempt to add ability to add layer
+        # self.new_type_name_input = QLineEdit()
+        # self.new_type_name_input.setPlaceholderText(
+        #     "Enter label (e.g. Neuron)"
+        # )
+        # self.layout().addWidget(self.new_type_name_input)
+
+        # self.add_layer_btn = QPushButton("Add New Cell Category")
+        # self.add_layer_btn.clicked.connect(self.add_custom_cell_type)
+        # self.layout().addWidget(self.add_layer_btn)
+
         # handle undo button
         undo_button = QPushButton("Undo (u)")
         undo_button.clicked.connect(self.undo)
@@ -423,6 +436,47 @@ class Count3D(QWidget):  # pylint: disable=R0902
             current_scale = list(layer.scale)
             current_scale[0] = z_scale
             layer.scale = current_scale
+
+    # def add_custom_cell_type(self):
+    #     from .celltype_config import CellTypeConfigNotOptional
+    #     from .celltype_config import (
+    #         DEFAULT_COLOR_SEQUENCE,
+    #         DEFAULT_KEYMAP_SEQUENCE,
+    #     )
+
+    #     # 1. Grab the name from your input box (image_8cfa7c.png shows "Neuron")
+    #     user_label = self.new_type_name_input.text().strip()
+    #     if not user_label:
+    #         user_label = f"Cell type {len(self.cell_type_gui_and_data) + 1}"
+
+    #     count = len(self.cell_type_gui_and_data)
+    #     # 2. Assign a color
+    #     new_color = DEFAULT_COLOR_SEQUENCE[count % len(DEFAULT_COLOR_SEQUENCE)]
+    #     # new_key = DEFAULT_KEYMAP_SEQUENCE[count % len(DEFAULT_KEYMAP_SEQUENCE)]
+
+    #     # 3. Build the full config object
+    #     config = CellTypeConfigNotOptional(
+    #         name=user_label,
+    #         color=new_color,
+    #         keybind="",  # We can leave hotkey blank for manual adds
+    #         outline_size=20,
+    #         symbol="disc",
+    #         face_color=new_color,
+    #         edge_width=1,
+    #         out_of_slice_point_size=2,
+    #     )
+    #     # 4. THIS IS THE KEY: This creates the button AND the napari layer
+    #     new_cell_type = self.init_celltype_gui_and_data(config)
+
+    #     # 5. Add to the list so 'Undo' and 'Save' recognize it
+    #     self.cell_type_gui_and_data.append(new_cell_type)
+
+    #     # 6. Put the new button in the sidebar (above the input box)
+    #     idx = self.layout().indexOf(self.new_type_name_input)
+    #     self.layout().insertWidget(idx, new_cell_type.button)
+
+    #     # 7. Clear the box
+    #     self.new_type_name_input.clear()
 
     def update_out_of_slice(self):
         """
